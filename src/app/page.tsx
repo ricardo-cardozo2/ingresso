@@ -9,7 +9,7 @@ type Band = {
   name: string;
 };
 
-// ----- Helpers de CPF -----
+// ----- Helpers -----
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
 }
@@ -26,27 +26,20 @@ function formatCpf(value: string): string {
 
 function isValidCpf(rawCpf: string): boolean {
   const cpf = onlyDigits(rawCpf);
-
   if (cpf.length !== 11) return false;
-  if (/^(\d)\1+$/.test(cpf)) return false; // 00000000000, 11111111111, etc.
+  if (/^(\d)\1+$/.test(cpf)) return false;
 
-  // 1º dígito verificador
   let sum = 0;
-  for (let i = 0; i < 9; i++) {
-    sum += parseInt(cpf[i], 10) * (10 - i);
-  }
+  for (let i = 0; i < 9; i++) sum += +cpf[i] * (10 - i);
   let rest = (sum * 10) % 11;
   if (rest === 10) rest = 0;
-  if (rest !== parseInt(cpf[9], 10)) return false;
+  if (rest !== +cpf[9]) return false;
 
-  // 2º dígito verificador
   sum = 0;
-  for (let i = 0; i < 10; i++) {
-    sum += parseInt(cpf[i], 10) * (11 - i);
-  }
+  for (let i = 0; i < 10; i++) sum += +cpf[i] * (11 - i);
   rest = (sum * 10) % 11;
   if (rest === 10) rest = 0;
-  if (rest !== parseInt(cpf[10], 10)) return false;
+  if (rest !== +cpf[10]) return false;
 
   return true;
 }
@@ -54,7 +47,7 @@ function isValidCpf(rawCpf: string): boolean {
 export default function HomePage() {
   const [bands, setBands] = useState<Band[]>([]);
   const [fullName, setFullName] = useState('');
-  const [cpf, setCpf] = useState(''); // armazenamos MASCARADO aqui
+  const [cpf, setCpf] = useState('');
   const [bandId, setBandId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,162 +63,160 @@ export default function HomePage() {
         .select('id, name')
         .order('name', { ascending: true });
 
-      if (!error && data) {
-        setBands(data as Band[]);
-      } else {
-        console.error(error);
-      }
+      if (!error && data) setBands(data);
     };
 
     loadBands();
   }, []);
 
-  const handleCpfChange = (value: string) => {
-    setCpf(formatCpf(value));
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     setError(null);
     setSuccess(false);
 
     const cpfDigits = onlyDigits(cpf);
 
-    if (!fullName || !cpfDigits || !bandId) {
+    if (!fullName.trim() || !cpfDigits || !bandId) {
       setError('Preencha todos os campos obrigatórios.');
       return;
     }
 
     if (!isValidCpf(cpfDigits)) {
-      setError('CPF inválido. Verifique os dados digitados.');
+      setError('CPF inválido.');
       return;
     }
 
     setIsSubmitting(true);
 
+    const { data: existing } = await supabase
+      .from('tickets')
+      .select('id')
+      .eq('cpf', cpfDigits)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      setIsSubmitting(false);
+      setError('Este CPF já possui um ingresso registrado.');
+      return;
+    }
+
     const { error: insertError } = await supabase.from('tickets').insert({
       full_name: fullName.trim(),
-      cpf: cpfDigits,      // ✅ só dígitos no banco
+      cpf: cpfDigits,
       band_id: bandId,
     });
 
     setIsSubmitting(false);
 
     if (insertError) {
-      console.error(insertError);
-      setError('Erro ao registrar seu ingresso. Tente novamente.');
+      setError('Erro ao registrar ingresso. Tente novamente.');
       return;
     }
 
     setSuccess(true);
-    // Se quiser limpar o formulário depois:
-    // setFullName('');
-    // setCpf('');
-    // setBandId('');
+
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 300);
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#0d1117] p-4">
-      <div className="w-full max-w-xl bg-[#161b22] border border-[#30363d] rounded-2xl shadow-xl p-8 space-y-6 text-white">
+    <main className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-[#0d1117] to-[#111827] p-4">
 
-        <h1 className="text-3xl font-bold text-center mb-2">
+      <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-2xl shadow-xl p-6 sm:p-7 space-y-6 text-white">
+
+        {/* TÍTULO */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-center">
           Compra de Ingresso
         </h1>
 
         <p className="text-center text-sm text-gray-400">
-          Valor do ingresso:{' '}
-          <span className="text-green-400 font-semibold">R$ {ticketPrice}</span>
+          Valor: <span className="text-green-400 font-semibold">R$ {ticketPrice}</span>
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        {/* FORM MOBILE */}
+        <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Nome */}
           <div>
-            <label className="block text-sm mb-1 text-gray-300">
-              Nome completo <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm text-gray-300 mb-1">Nome completo *</label>
             <input
-              className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none transition"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Seu nome completo"
-              required
+              placeholder="Seu nome"
             />
           </div>
 
-          {/* CPF com máscara */}
+          {/* CPF */}
           <div>
-            <label className="block text-sm mb-1 text-gray-300">
-              CPF <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm text-gray-300 mb-1">CPF *</label>
             <input
-              className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none transition"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
               value={cpf}
-              onChange={(e) => handleCpfChange(e.target.value)}
+              onChange={(e) => setCpf(formatCpf(e.target.value))}
               placeholder="000.000.000-00"
               inputMode="numeric"
-              maxLength={14} // 000.000.000-00
-              required
+              maxLength={14}
             />
           </div>
 
           {/* Banda */}
-          <div>
-            <label className="block text-sm mb-1 text-gray-300">
-              Banda <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none transition"
-              value={bandId}
-              onChange={(e) => setBandId(e.target.value)}
-              required
-            >
-              <option value="" className="text-gray-400">
-                Selecione uma banda
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Banda *</label>
+          <select
+            className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm text-white focus:border-blue-600 outline-none"
+            value={bandId}
+            onChange={(e) => setBandId(e.target.value)}
+          >
+            <option value="">Selecione...</option>
+            {bands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
               </option>
-              {bands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
+            ))}
+          </select>
+        </div>
 
-          {/* Erro */}
+
+          {/* ERRO */}
           {error && (
-            <p className="text-sm text-red-400 font-medium">
+            <p className="text-sm text-red-400 bg-red-950/50 p-2 rounded-lg text-center">
               {error}
             </p>
           )}
 
+          {/* BOTÃO */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-3 rounded-lg transition transform hover:scale-[1.02] disabled:opacity-60"
+            className="
+              w-full h-12 bg-blue-600 hover:bg-blue-700 active:scale-[.98]
+              text-white text-sm font-semibold rounded-xl transition
+              disabled:opacity-60
+            "
           >
-            {isSubmitting ? 'Salvando...' : 'Confirmar dados e gerar PIX'}
+            {isSubmitting ? 'Salvando...' : 'Gerar PIX'}
           </button>
         </form>
 
-        {/* PIX */}
+        {/* QR CODE */}
         {success && (
-          <div className="border-t border-[#30363d] pt-6 space-y-3">
+          <div className="pt-6 space-y-4 border-t border-[#30363d]">
+
             <h2 className="text-xl font-semibold text-center text-green-400">
-              Escaneie o QRCode para pagar o PIX
+              Escaneie o QRCode
             </h2>
 
-            <p className="text-xs text-gray-400 text-center">
-              Após o pagamento, guarde o comprovante.
-            </p>
-
-            <div className="flex justify-center py-4">
+            <div className="flex justify-center">
               <QR.QRCodeSVG value={pixPayload} size={220} />
             </div>
 
-            <div className="bg-[#0d1117] p-4 rounded border border-[#30363d] text-xs break-all">
-              <strong className="text-gray-300">Pix copia e cola:</strong>
-              <br />
-              <span className="text-gray-400">{pixPayload}</span>
+            <div className="bg-[#0d1117] p-4 rounded-xl border border-[#30363d] text-xs break-all leading-relaxed">
+              <strong className="text-gray-300">Pix Copia e Cola:</strong>
+              <div className="text-gray-400 mt-1">{pixPayload}</div>
             </div>
           </div>
         )}
