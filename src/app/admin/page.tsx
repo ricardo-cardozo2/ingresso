@@ -415,7 +415,7 @@ export default function AdminPage() {
           >
             ▶
           </button>
-        </div>
+        </div> 
       </section>
     </main> 
   );
