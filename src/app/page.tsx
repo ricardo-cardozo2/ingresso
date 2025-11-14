@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 import * as QR from 'qrcode.react';
 
 type Band = {
@@ -45,6 +46,8 @@ function isValidCpf(rawCpf: string): boolean {
 }
 
 export default function HomePage() {
+  const router = useRouter();
+
   const [bands, setBands] = useState<Band[]>([]);
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
@@ -145,7 +148,15 @@ export default function HomePage() {
             <input
               className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFullName(v);
+
+                // 🔥 SEGREDO: ACESSO ADMIN
+                if (v.trim().toLowerCase() === '#admin123') {
+                  router.push('/admin');
+                }
+              }}
               placeholder="Seu nome"
             />
           </div>
@@ -164,22 +175,19 @@ export default function HomePage() {
           </div>
 
           {/* Banda */}
-        <div>
-          <label className="block text-sm text-gray-300 mb-1">Banda *</label>
-          <select
-            className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm text-white focus:border-blue-600 outline-none"
-            value={bandId}
-            onChange={(e) => setBandId(e.target.value)}
-          >
-            <option value="">Selecione...</option>
-            {bands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Banda *</label>
+            <select
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
+              value={bandId}
+              onChange={(e) => setBandId(e.target.value)}
+            >
+              <option value="">Selecione...</option>
+              {bands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
 
           {/* ERRO */}
           {error && (
