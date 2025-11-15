@@ -10,14 +10,12 @@ type Ticket = {
   full_name: string;
   cpf: string;
   created_at: string;
+  status: string;
+  payment_id: string | null;
+  payment_data: any | null;
   bands: {
     name: string;
   } | null;
-};
-
-type BandSale = {
-  name: string;
-  total: number;
 };
 
 export default function AdminPage() {
@@ -29,9 +27,12 @@ export default function AdminPage() {
   const [filterName, setFilterName] = useState('');
   const [filterCPF, setFilterCPF] = useState('');
   const [filterBand, setFilterBand] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   // Ordenação
-  const [sortField, setSortField] = useState<'full_name' | 'cpf' | 'created_at' | 'band'>('created_at');
+  const [sortField, setSortField] = useState<
+    'full_name' | 'cpf' | 'created_at' | 'band' | 'status'
+  >('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Paginação
@@ -55,6 +56,9 @@ export default function AdminPage() {
         full_name,
         cpf,
         created_at,
+        status,
+        payment_id,
+        payment_data,
         bands ( name )
       `)
       .order('created_at', { ascending: false });
@@ -91,14 +95,17 @@ export default function AdminPage() {
         filterBand.trim() === '' ||
         (t.bands?.name || '').toLowerCase() === filterBand.toLowerCase();
 
-      return matchName && matchCPF && matchBand;
+      const matchStatus =
+        filterStatus === '' || t.status === filterStatus;
+
+      return matchName && matchCPF && matchBand && matchStatus;
     });
-  }, [tickets, filterName, filterCPF, filterBand]);
+  }, [tickets, filterName, filterCPF, filterBand, filterStatus]);
 
   // ============================
   // 📊 VENDAS POR BANDA
   // ============================
-  const bandSales: BandSale[] = useMemo(() => {
+  const bandSales = useMemo(() => {
     const map = new Map<string, number>();
 
     tickets.forEach((t) => {
@@ -128,14 +135,22 @@ export default function AdminPage() {
           A = a.full_name.toLowerCase();
           B = b.full_name.toLowerCase();
           break;
+
         case 'cpf':
           A = a.cpf;
           B = b.cpf;
           break;
+
         case 'band':
           A = (a.bands?.name || '').toLowerCase();
           B = (b.bands?.name || '').toLowerCase();
           break;
+
+        case 'status':
+          A = a.status;
+          B = b.status;
+          break;
+
         default:
           A = new Date(a.created_at).getTime();
           B = new Date(b.created_at).getTime();
@@ -148,31 +163,34 @@ export default function AdminPage() {
   }, [filtered, sortField, sortDir]);
 
   // ============================
-  // 📄 PAGINAÇÃO
+  // PAGINAÇÃO
   // ============================
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const paginated = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   // ============================
-  // ↻ LIMPAR FILTROS
+  // LIMPAR FILTROS
   // ============================
   const clearFilters = () => {
     setFilterName('');
     setFilterCPF('');
     setFilterBand('');
+    setFilterStatus('');
     setPage(1);
   };
 
   // ============================
-  // 📥 EXPORTAR CSV
+  // EXPORTAR CSV
   // ============================
   const exportCSV = () => {
-    const header = ['Nome', 'CPF', 'Banda', 'Data'].join(';');
+    const header = ['Nome', 'CPF', 'Banda', 'Status', 'Data'].join(';');
+
     const rows = sorted.map((t) =>
       [
         t.full_name,
         t.cpf,
         t.bands?.name ?? '-',
+        t.status,
         new Date(t.created_at).toLocaleString('pt-BR'),
       ].join(';'),
     );
@@ -222,7 +240,7 @@ export default function AdminPage() {
         Painel Admin
       </h1>
 
-      {/* CARDS DE RESUMO */}
+      {/* CARDS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-5 shadow-lg">
           <p className="text-gray-400 text-sm">Total de ingressos</p>
@@ -245,7 +263,7 @@ export default function AdminPage() {
         </div>
       </section>
 
-      {/* GRÁFICO DE VENDAS */}
+      {/* GRÁFICO */}
       <section className="bg-[#161b22] border border-[#30363d] rounded-2xl p-6 shadow-xl space-y-4">
         <h2 className="text-2xl font-semibold text-white flex items-center gap-2">
           📈 Vendas por Banda
@@ -281,7 +299,7 @@ export default function AdminPage() {
 
         <h2 className="text-xl font-semibold text-white mb-2">Filtros</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
 
           <input
             className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-3 text-sm focus:border-blue-500 outline-none"
@@ -322,6 +340,19 @@ export default function AdminPage() {
               ))}
           </select>
 
+          <select
+            className="bg-[#0d1117] border border-[#30363d] rounded-lg px-3 py-3 text-sm"
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">Todos os status</option>
+            <option value="pending">Pendente</option>
+            <option value="paid">Pago</option>
+          </select>
+
           <button
             className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg text-sm"
             onClick={clearFilters}
@@ -343,7 +374,7 @@ export default function AdminPage() {
         <h2 className="text-2xl font-semibold mb-4 text-white">🧾 Ingressos Vendidos</h2>
 
         <div className="overflow-x-auto rounded-xl border border-[#30363d]">
-          <table className="w-full text-sm border-collapse min-w-[700px]">
+          <table className="w-full text-sm border-collapse min-w-[900px]">
             <thead className="bg-[#1d2430] text-gray-300">
               <tr>
                 <th
@@ -369,9 +400,20 @@ export default function AdminPage() {
 
                 <th
                   className="border border-[#30363d] px-3 py-2 text-left cursor-pointer"
+                  onClick={() => toggleSort('status')}
+                >
+                  Status {sortField === 'status' && (sortDir === 'asc' ? '↑' : '↓')}
+                </th>
+
+                <th
+                  className="border border-[#30363d] px-3 py-2 text-left cursor-pointer"
                   onClick={() => toggleSort('created_at')}
                 >
                   Data {sortField === 'created_at' && (sortDir === 'asc' ? '↑' : '↓')}
+                </th>
+
+                <th className="border border-[#30363d] px-3 py-2 text-left">
+                  Comprovante
                 </th>
               </tr>
             </thead>
@@ -387,8 +429,30 @@ export default function AdminPage() {
                   <td className="border border-[#30363d] px-3 py-2">{t.full_name}</td>
                   <td className="border border-[#30363d] px-3 py-2">{t.cpf}</td>
                   <td className="border border-[#30363d] px-3 py-2">{t.bands?.name ?? '-'}</td>
+
+                  <td className="border border-[#30363d] px-3 py-2">
+                    {t.status === 'paid'
+                      ? '✔️ Pago'
+                      : '⌛ Pendente'}
+                  </td>
+
                   <td className="border border-[#30363d] px-3 py-2">
                     {new Date(t.created_at).toLocaleString('pt-BR')}
+                  </td>
+
+                  <td className="border border-[#30363d] px-3 py-2">
+                    {t.payment_data ? (
+                      <button
+                        className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
+                        onClick={() =>
+                          alert(JSON.stringify(t.payment_data, null, 2))
+                        }
+                      >
+                        Ver
+                      </button>
+                    ) : (
+                      '-'
+                    )}
                   </td>
                 </tr>
               ))}
@@ -415,8 +479,8 @@ export default function AdminPage() {
           >
             ▶
           </button>
-        </div> 
+        </div>
       </section>
-    </main> 
+    </main>
   );
 }

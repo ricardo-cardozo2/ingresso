@@ -1,16 +1,15 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import * as QR from 'qrcode.react';
 
 type Band = {
   id: string;
   name: string;
 };
 
-// ----- Helpers -----
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, '');
 }
@@ -54,22 +53,22 @@ export default function HomePage() {
   const [bandId, setBandId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const ticketPrice = process.env.NEXT_PUBLIC_TICKET_PRICE || '10,00';
-  const pixPayload = process.env.NEXT_PUBLIC_PIX_PAYLOAD || 'PIX_PAYLOAD_EXEMPLO';
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+  const [qrCopyPaste, setQrCopyPaste] = useState<string | null>(null);
+
+  const ticketPrice = process.env.NEXT_PUBLIC_TICKET_PRICE || '10.00';
 
   useEffect(() => {
-    const loadBands = async () => {
-      const { data, error } = await supabase
+    const load = async () => {
+      const { data } = await supabase
         .from('bands')
         .select('id, name')
         .order('name', { ascending: true });
 
-      if (!error && data) setBands(data);
+      if (data) setBands(data);
     };
-
-    loadBands();
+    load();
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -77,7 +76,8 @@ export default function HomePage() {
     if (isSubmitting) return;
 
     setError(null);
-    setSuccess(false);
+    setQrBase64(null);
+    setQrCopyPaste(null);
 
     const cpfDigits = onlyDigits(cpf);
 
@@ -101,28 +101,50 @@ export default function HomePage() {
 
     if (existing && existing.length > 0) {
       setIsSubmitting(false);
-      setError('Este CPF já possui um ingresso registrado.');
+      setError('Este CPF já possui um ingresso.');
       return;
     }
 
-    const { error: insertError } = await supabase.from('tickets').insert({
-      full_name: fullName.trim(),
-      cpf: cpfDigits,
-      band_id: bandId,
-    });
+    const { data: ticket, error: insertError } = await supabase
+      .from('tickets')
+      .insert({
+        full_name: fullName.trim(),
+        cpf: cpfDigits,
+        band_id: bandId,
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (insertError || !ticket) {
+      setIsSubmitting(false);
+      setError('Erro ao registrar ingresso.');
+      return;
+    }
+
+    // 🔥 FETCH AJUSTADO — AGORA É OBRIGATÓRIO TER HEADERS
+    const payment = await fetch('/api/payment/create', {
+      method: 'POST',
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ticketId: ticket.id,
+        full_name: fullName.trim(),
+        cpf: cpfDigits,
+        amount: ticketPrice
+      })
+    }).then(r => r.json());
+
+    if (!payment.qr_base64) {
+      console.log("Erro no pagamento:", payment);
+      setError('Erro ao gerar PIX.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    setQrBase64(payment.qr_base64);
+    setQrCopyPaste(payment.qr_copy_paste);
 
     setIsSubmitting(false);
-
-    if (insertError) {
-      setError('Erro ao registrar ingresso. Tente novamente.');
-      return;
-    }
-
-    setSuccess(true);
-
-    setTimeout(() => {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    }, 300);
   };
 
   return (
@@ -130,7 +152,6 @@ export default function HomePage() {
 
       <div className="w-full max-w-md bg-[#161b22] border border-[#30363d] rounded-2xl shadow-xl p-6 sm:p-7 space-y-6 text-white">
 
-        {/* TÍTULO */}
         <h1 className="text-2xl sm:text-3xl font-bold text-center">
           Compra de Ingresso
         </h1>
@@ -139,20 +160,16 @@ export default function HomePage() {
           Valor: <span className="text-green-400 font-semibold">R$ {ticketPrice}</span>
         </p>
 
-        {/* FORM MOBILE */}
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* Nome */}
           <div>
             <label className="block text-sm text-gray-300 mb-1">Nome completo *</label>
             <input
-              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm"
               value={fullName}
               onChange={(e) => {
                 const v = e.target.value;
                 setFullName(v);
-
-                // 🔥 SEGREDO: ACESSO ADMIN
                 if (v.trim().toLowerCase() === '#admin123') {
                   router.push('/admin');
                 }
@@ -161,11 +178,10 @@ export default function HomePage() {
             />
           </div>
 
-          {/* CPF */}
           <div>
             <label className="block text-sm text-gray-300 mb-1">CPF *</label>
             <input
-              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm"
               value={cpf}
               onChange={(e) => setCpf(formatCpf(e.target.value))}
               placeholder="000.000.000-00"
@@ -174,11 +190,10 @@ export default function HomePage() {
             />
           </div>
 
-          {/* Banda */}
           <div>
             <label className="block text-sm text-gray-300 mb-1">Banda *</label>
             <select
-              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm focus:border-blue-600 outline-none"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded-xl px-3 text-sm"
               value={bandId}
               onChange={(e) => setBandId(e.target.value)}
             >
@@ -189,29 +204,23 @@ export default function HomePage() {
             </select>
           </div>
 
-          {/* ERRO */}
           {error && (
             <p className="text-sm text-red-400 bg-red-950/50 p-2 rounded-lg text-center">
               {error}
             </p>
           )}
 
-          {/* BOTÃO */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="
-              w-full h-12 bg-blue-600 hover:bg-blue-700 active:scale-[.98]
-              text-white text-sm font-semibold rounded-xl transition
-              disabled:opacity-60
-            "
+            className="w-full h-12 bg-blue-600 hover:bg-blue-700 active:scale-[.98]
+                       text-white text-sm font-semibold rounded-xl transition disabled:opacity-60"
           >
-            {isSubmitting ? 'Salvando...' : 'Gerar PIX'}
+            {isSubmitting ? 'Gerando PIX...' : 'Gerar PIX'}
           </button>
         </form>
 
-        {/* QR CODE */}
-        {success && (
+        {(qrBase64 || qrCopyPaste) && (
           <div className="pt-6 space-y-4 border-t border-[#30363d]">
 
             <h2 className="text-xl font-semibold text-center text-green-400">
@@ -219,15 +228,20 @@ export default function HomePage() {
             </h2>
 
             <div className="flex justify-center">
-              <QR.QRCodeSVG value={pixPayload} size={220} />
+              <img
+                src={`data:image/png;base64,${qrBase64}`}
+                alt="QR Code Pix"
+                className="w-56 h-56"
+              />
             </div>
 
             <div className="bg-[#0d1117] p-4 rounded-xl border border-[#30363d] text-xs break-all leading-relaxed">
               <strong className="text-gray-300">Pix Copia e Cola:</strong>
-              <div className="text-gray-400 mt-1">{pixPayload}</div>
+              <div className="text-gray-400 mt-1">{qrCopyPaste}</div>
             </div>
           </div>
         )}
+
       </div>
     </main>
   );
