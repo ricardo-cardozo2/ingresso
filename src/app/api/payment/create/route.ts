@@ -1,4 +1,3 @@
-// app/api/payment/create/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -17,7 +16,7 @@ export async function POST(req: Request) {
       transaction_amount: Number(amount),
       description: "Ingresso de Show",
       payment_method_id: "pix",
-      external_reference: ticketId,
+      external_reference: ticketId, // 🔥 ESSENCIAL
       payer: {
         email: `${cpfDigits}@comprador.com`,
         first_name: full_name,
@@ -28,7 +27,6 @@ export async function POST(req: Request) {
       }
     };
 
-    // 🔥 Gerar chave única obrigatória
     const idempotencyKey = crypto.randomUUID();
 
     const response = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -36,13 +34,13 @@ export async function POST(req: Request) {
       headers: {
         "Authorization": `Bearer ${process.env.MP_ACCESS_TOKEN}`,
         "Content-Type": "application/json",
-        "X-Idempotency-Key": idempotencyKey // 🔥 OBRIGATÓRIO
+        "X-Idempotency-Key": idempotencyKey
       },
       body: JSON.stringify(payload)
     });
 
     const data = await response.json();
-    console.log("MP RESPONSE RAW:", data);
+    console.log("📌 MP RESPONSE RAW:", data);
 
     if (!data.id) {
       return NextResponse.json(
@@ -51,7 +49,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // salvar payment_id
     await supabase
       .from("tickets")
       .update({ payment_id: data.id })
@@ -64,7 +61,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error("CREATE PIX ERROR:", error);
+    console.error("❌ CREATE PIX ERROR:", error);
     return NextResponse.json({ error: true }, { status: 500 });
   }
 }
