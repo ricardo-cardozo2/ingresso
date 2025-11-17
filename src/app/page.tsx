@@ -56,6 +56,7 @@ export default function HomePage() {
 
   const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [qrCopyPaste, setQrCopyPaste] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const ticketPrice = process.env.NEXT_PUBLIC_TICKET_PRICE || '10.00';
 
@@ -70,6 +71,13 @@ export default function HomePage() {
     };
     load();
   }, []);
+
+  const handleCopy = async () => {
+    if (!qrCopyPaste) return;
+    await navigator.clipboard.writeText(qrCopyPaste);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,7 +130,6 @@ export default function HomePage() {
       return;
     }
 
-    // 🔥 FETCH AJUSTADO — AGORA É OBRIGATÓRIO TER HEADERS
     const payment = await fetch('/api/payment/create', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
@@ -235,10 +242,18 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="bg-[#0d1117] p-4 rounded-xl border border-[#30363d] text-xs break-all leading-relaxed">
+            <div className="bg-[#0d1117] p-4 rounded-xl border border-[#30363d] text-xs break-all leading-relaxed relative">
               <strong className="text-gray-300">Pix Copia e Cola:</strong>
               <div className="text-gray-400 mt-1">{qrCopyPaste}</div>
+
+              <button
+                onClick={handleCopy}
+                className="absolute top-2 right-2 text-xs px-3 py-1 bg-blue-700 hover:bg-blue-800 rounded-md"
+              >
+                {copied ? 'Copiado!' : 'Copiar'}
+              </button>
             </div>
+
           </div>
         )}
 
