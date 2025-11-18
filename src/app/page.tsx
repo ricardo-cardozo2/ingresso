@@ -3,7 +3,6 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
 
 type Band = {
   id: string;
@@ -23,11 +22,10 @@ function formatCpf(v: string) {
 }
 
 export default function HomePage() {
-  const router = useRouter();
-
   const [bands, setBands] = useState<Band[]>([]);
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
+  const [email, setEmail] = useState('');
   const [bandId, setBandId] = useState('');
   const [quantity, setQuantity] = useState(1);
 
@@ -47,20 +45,29 @@ export default function HomePage() {
       .then(({ data }) => data && setBands(data));
   }, []);
 
+  const copyToClipboard = async () => {
+    if (!qrCopyPaste) return;
+    await navigator.clipboard.writeText(qrCopyPaste);
+    alert("PIX Copia e Cola copiado!");
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-
     setError(null);
     setQrBase64(null);
     setQrCopyPaste(null);
 
+    setIsSubmitting(true);
+
     const cpfDigits = onlyDigits(cpf);
 
+    // 🔥 NOVO INSERT COM EMAIL
     const { data: ticket, error: insertErr } = await supabase
       .from("tickets")
       .insert({
         full_name: fullName.trim(),
         cpf: cpfDigits,
+        email: email.trim(),
         band_id: bandId,
         status: "pending",
       })
@@ -68,7 +75,9 @@ export default function HomePage() {
       .single();
 
     if (insertErr || !ticket) {
+      console.error(insertErr);
       setError("Erro ao registrar ingresso.");
+      setIsSubmitting(false);
       return;
     }
 
@@ -79,6 +88,7 @@ export default function HomePage() {
         ticketId: ticket.id,
         full_name: fullName.trim(),
         cpf: cpfDigits,
+        email: email.trim(),
         quantity,
         amount: ticketPrice
       })
@@ -86,11 +96,14 @@ export default function HomePage() {
 
     if (!payment.qr_base64) {
       setError("Erro ao gerar PIX.");
+      setIsSubmitting(false);
       return;
     }
 
     setQrBase64(payment.qr_base64);
     setQrCopyPaste(payment.qr_copy_paste);
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -104,26 +117,42 @@ export default function HomePage() {
 
           <div>
             <label className="block text-sm mb-1">Nome completo *</label>
-            <input className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
+            <input
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
           </div>
 
           <div>
+            <label className="block text-sm mb-1">Email *</label>
+            <input
+              type="email"
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
             <label className="block text-sm mb-1">CPF *</label>
-            <input className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
+            <input
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
               value={cpf}
               onChange={(e) => setCpf(formatCpf(e.target.value))}
               maxLength={14}
+              required
             />
           </div>
 
           <div>
             <label className="block text-sm mb-1">Banda *</label>
-            <select className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
+            <select
+              className="w-full h-12 bg-[#0d1117] border border-[#30363d] rounded px-3"
               value={bandId}
               onChange={(e) => setBandId(e.target.value)}
+              required
             >
               <option value="">Selecione...</option>
               {bands.map(b => (
@@ -140,16 +169,26 @@ export default function HomePage() {
               value={quantity}
               min={1}
               onChange={(e) => setQuantity(Number(e.target.value))}
+              required
             />
           </div>
 
-          <button className="w-full h-12 bg-blue-600 rounded mt-4">
-            Gerar PIX
+          {/* 🔥 BOTÃO COM LOADING */}
+          <button
+            className="w-full h-12 bg-blue-600 rounded mt-4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Gerando PIX..." : "Gerar PIX"}
           </button>
         </form>
 
+        {error && (
+          <div className="text-red-400 text-center text-sm">{error}</div>
+        )}
+
         {qrBase64 && (
           <div className="pt-4 border-t border-[#30363d] space-y-4">
+
             <img
               src={`data:image/png;base64,${qrBase64}`}
               className="w-64 h-64 mx-auto"
@@ -159,6 +198,13 @@ export default function HomePage() {
             <div className="bg-[#0d1117] p-4 rounded border border-[#30363d] text-xs break-all">
               <strong>Pix Copia e Cola:</strong>
               <div className="mt-1">{qrCopyPaste}</div>
+
+              <button
+                className="mt-2 px-3 py-2 bg-blue-600 rounded text-white text-xs cursor-pointer"
+                onClick={copyToClipboard}
+              >
+                Copiar PIX
+              </button>
             </div>
           </div>
         )}
