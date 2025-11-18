@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   'https://vlbjivrwlxvqywbjweeb.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE!
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsYmppdnJ3bHh2cXl3Ymp3ZWViIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzA0MDM3NSwiZXhwIjoyMDc4NjE2Mzc1fQ.LmORB1zPlLd2uZZNeeyIseKFopzJWlVXCihqXc9jhbE'
 );
 
 export async function logEvent(
