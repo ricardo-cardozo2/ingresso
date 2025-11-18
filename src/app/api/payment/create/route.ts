@@ -1,3 +1,4 @@
+// app/api/payment/create/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
@@ -9,14 +10,22 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    const { ticketId, full_name, cpf, amount } = await req.json();
+    const { ticketId, full_name, cpf, amount, quantity = 1 } = await req.json();
     const cpfDigits = cpf.replace(/\D/g, "");
 
+    const finalAmount = Number(amount) * Number(quantity);
+
+    // salvar o valor calculado internamente
+    await supabase
+      .from("tickets")
+      .update({ ticket_amount: finalAmount })
+      .eq("id", ticketId);
+
     const payload = {
-      transaction_amount: Number(amount),
+      transaction_amount: finalAmount,
       description: "Ingresso de Show",
       payment_method_id: "pix",
-      external_reference: ticketId, // 🔥 ESSENCIAL
+      external_reference: ticketId,
       payer: {
         email: `${cpfDigits}@comprador.com`,
         first_name: full_name,
@@ -40,15 +49,12 @@ export async function POST(req: Request) {
     });
 
     const data = await response.json();
-    console.log("📌 MP RESPONSE RAW:", data);
 
     if (!data.id) {
-      return NextResponse.json(
-        { error: true, details: data },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: true, details: data }, { status: 500 });
     }
 
+    // atualizar payment_id
     await supabase
       .from("tickets")
       .update({ payment_id: data.id })
@@ -61,7 +67,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error("❌ CREATE PIX ERROR:", error);
+    console.error("CREATE PIX ERROR:", error);
     return NextResponse.json({ error: true }, { status: 500 });
   }
 }
