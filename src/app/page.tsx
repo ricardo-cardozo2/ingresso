@@ -35,7 +35,7 @@ export default function HomePage() {
   const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [qrCopyPaste, setQrCopyPaste] = useState<string | null>(null);
 
-  const ticketPrice = Number(process.env.NEXT_PUBLIC_TICKET_PRICE || "10.00");
+  const ticketPrice = Number(process.env.NEXT_PUBLIC_TICKET_PRICE || "13.00");
 
   useEffect(() => {
     supabase

@@ -22,7 +22,7 @@ type Band = {
   name: string;
 };
 
-const TICKET_PRICE = 10;
+const TICKET_PRICE = 13;
 
 export default function AdminPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
