@@ -14,6 +14,7 @@ type Ticket = {
   payment_id: string | null;
   payment_data: any | null;
   payment_amount?: number | null;
+  ticket_amount?: number | null;
   bands: { name: string } | null;
 };
 
@@ -65,6 +66,7 @@ export default function AdminPage() {
           payment_id,
           payment_data,
           payment_amount,
+          ticket_amount,
           bands ( name )
         `)
         .order('created_at', { ascending: false }),
@@ -77,7 +79,13 @@ export default function AdminPage() {
     const normalized: Ticket[] = (rawTickets || []).map((t: any) => ({
       ...t,
       bands: Array.isArray(t.bands) ? t.bands[0] : t.bands,
-      payment_amount: t.payment_amount ?? (t.payment_data?.transaction_amount ?? null),
+
+      // 🔥 REGRA FINAL — 100% como você pediu
+      payment_amount:
+        t.payment_amount ??
+        t.ticket_amount ??
+        t.payment_data?.transaction_amount ??
+        null,
     }));
 
     setTickets(normalized);
@@ -102,7 +110,7 @@ export default function AdminPage() {
   const totalVendas = soldTickets.length;
 
   const totalArrecadado = useMemo(() => {
-    return soldTickets.reduce((sum, t) => sum + getQuantity(t) * TICKET_PRICE, 0);
+    return soldTickets.reduce((sum, t) => sum + (t.payment_amount ?? 0), 0);
   }, [soldTickets]);
 
   // ============================
@@ -323,7 +331,6 @@ export default function AdminPage() {
             <tbody>
               {paginated.map((t, idx) => {
                 const qty = getQuantity(t);
-                const total = qty * TICKET_PRICE;
 
                 return (
                   <tr
@@ -335,7 +342,14 @@ export default function AdminPage() {
                     <td className="cell px-4 py-3">{t.bands?.name ?? '-'}</td>
                     <td className="cell px-4 py-3">{new Date(t.created_at).toLocaleString('pt-BR')}</td>
                     <td className="cell px-4 py-3">{qty}</td>
-                    <td className="cell px-4 py-3">R$ {total.toFixed(2)}</td>
+
+                    <td className="cell px-4 py-3">
+                      {t.status === 'paid'
+                        ? `R$ ${(t.payment_amount ?? 0).toFixed(2)}`
+                        : t.ticket_amount
+                          ? `R$ ${t.ticket_amount.toFixed(2)}`
+                          : '-'}
+                    </td>
 
                     <td className="cell px-4 py-3">
                       {t.payment_data ? (
